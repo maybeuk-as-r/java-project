@@ -42,6 +42,7 @@ public class AttendanceAnalytics {
     }
 
     void launch() {
+        installModernTheme();
         try (Connection c = db()) {
             try (Statement s = c.createStatement(); ResultSet r = s.executeQuery("SELECT 1")) {
                 if (!r.next()) throw new SQLException("Database ping failed.");
@@ -53,50 +54,124 @@ public class AttendanceAnalytics {
             return;
         }
 
-        frame = new JFrame("Smart Attendance | Java Admin");
+        frame = new JFrame("Attendly | Smart Attendance");
         frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
-        frame.setSize(1200, 760);
-        frame.setMinimumSize(new Dimension(980, 620));
+        frame.setSize(1360, 850);
+        frame.setMinimumSize(new Dimension(1050, 680));
         frame.setLocationRelativeTo(null);
 
-        JPanel root = new JPanel(new BorderLayout(12, 12));
-        root.setBorder(BorderFactory.createEmptyBorder(14, 16, 14, 16));
-        root.setBackground(new Color(244, 247, 252));
+        JPanel root = new JPanel(new BorderLayout(0, 0));
+        root.setBackground(new Color(246, 248, 252));
         frame.setContentPane(root);
 
-        JPanel header = new JPanel(new BorderLayout(8, 8));
-        header.setOpaque(false);
-        JLabel title = new JLabel("Smart Attendance Management");
-        title.setFont(new Font("SansSerif", Font.BOLD, 25));
-        overview.setFont(new Font("SansSerif", Font.PLAIN, 13));
-        header.add(title, BorderLayout.NORTH);
-        header.add(overview, BorderLayout.SOUTH);
-        root.add(header, BorderLayout.NORTH);
+        JPanel sidebar = new JPanel();
+        sidebar.setPreferredSize(new Dimension(218, 0));
+        sidebar.setBackground(new Color(18, 28, 49));
+        sidebar.setBorder(BorderFactory.createEmptyBorder(22, 14, 20, 14));
+        sidebar.setLayout(new BoxLayout(sidebar, BoxLayout.Y_AXIS));
 
-        JTabbedPane tabs = new JTabbedPane();
-        tabs.addTab("Dashboard", dashboard());
-        tabs.addTab("Users / Students CRUD", usersPanel());
-        tabs.addTab("Classes & Enrolments", classesPanel());
-        tabs.addTab("Attendance CRUD", attendancePanel());
-        tabs.addTab("Reports & Charts", reportsPanel());
-        root.add(tabs, BorderLayout.CENTER);
+        JLabel brand = new JLabel("  ◈  ATTENDLY");
+        brand.setForeground(Color.WHITE);
+        brand.setFont(new Font("SansSerif", Font.BOLD, 21));
+        brand.setAlignmentX(Component.LEFT_ALIGNMENT);
+        sidebar.add(brand);
+        JLabel tagline = new JLabel("  SMART ATTENDANCE");
+        tagline.setForeground(new Color(148, 163, 184));
+        tagline.setFont(new Font("SansSerif", Font.BOLD, 10));
+        tagline.setBorder(BorderFactory.createEmptyBorder(5, 0, 28, 0));
+        tagline.setAlignmentX(Component.LEFT_ALIGNMENT);
+        sidebar.add(tagline);
+
+        JPanel content = new JPanel(new BorderLayout(0, 0));
+        content.setBackground(new Color(246, 248, 252));
+        JPanel topbar = new JPanel(new BorderLayout(10, 8));
+        topbar.setBackground(Color.WHITE);
+        topbar.setBorder(BorderFactory.createCompoundBorder(
+                BorderFactory.createMatteBorder(0, 0, 1, 0, new Color(229, 234, 242)),
+                BorderFactory.createEmptyBorder(18, 26, 18, 26)));
+        JLabel title = new JLabel("Overview");
+        title.setFont(new Font("SansSerif", Font.BOLD, 25));
+        title.setForeground(new Color(23, 37, 63));
+        overview.setFont(new Font("SansSerif", Font.PLAIN, 12));
+        overview.setForeground(new Color(100, 116, 139));
+        topbar.add(title, BorderLayout.NORTH);
+        topbar.add(overview, BorderLayout.SOUTH);
+        content.add(topbar, BorderLayout.NORTH);
+
+        JPanel pageHost = new JPanel(new CardLayout());
+        pageHost.setBackground(new Color(246, 248, 252));
+        String[] pageNames = {"Dashboard", "Users & Students", "Classes", "Attendance", "Reports"};
+        JPanel[] pages = {dashboard(), usersPanel(), classesPanel(), attendancePanel(), reportsPanel()};
+        JLabel[] pageTitle = {title};
+        CardLayout cardLayout = (CardLayout) pageHost.getLayout();
+        for (int i = 0; i < pages.length; i++) {
+            JPanel wrap = new JPanel(new BorderLayout());
+            wrap.setBackground(new Color(246, 248, 252));
+            wrap.setBorder(BorderFactory.createEmptyBorder(20, 24, 22, 24));
+            wrap.add(pages[i], BorderLayout.CENTER);
+            pageHost.add(wrap, pageNames[i]);
+            final String pageName = pageNames[i];
+            JButton nav = navButton(pageName, i == 0);
+            nav.addActionListener(e -> {
+                cardLayout.show(pageHost, pageName);
+                title.setText(pageName.equals("Users & Students") ? "Users & Students" :
+                        pageName.equals("Classes") ? "Classes & Enrolments" :
+                        pageName.equals("Attendance") ? "Attendance register" :
+                        pageName.equals("Reports") ? "Reports & analytics" : "Overview");
+                for (Component c : sidebar.getComponents()) {
+                    if (c instanceof JButton) styleNav((JButton)c, ((JButton)c) == nav);
+                }
+                if (pageName.equals("Attendance")) loadAttendanceHistory();
+                if (pageName.equals("Reports")) loadReports();
+            });
+            sidebar.add(nav);
+            sidebar.add(Box.createVerticalStrut(7));
+        }
+        sidebar.add(Box.createVerticalGlue());
+        JLabel dbLabel = new JLabel("●  DATABASE CONNECTED");
+        dbLabel.setForeground(new Color(110, 231, 183));
+        dbLabel.setFont(new Font("SansSerif", Font.BOLD, 10));
+        dbLabel.setBorder(BorderFactory.createEmptyBorder(10, 4, 0, 0));
+        sidebar.add(dbLabel);
+
+        content.add(pageHost, BorderLayout.CENTER);
+        root.add(sidebar, BorderLayout.WEST);
+        root.add(content, BorderLayout.CENTER);
 
         frame.setVisible(true);
         refreshAll();
     }
 
     JPanel dashboard() {
-        JPanel p = new JPanel(new BorderLayout(10, 10));
-        p.setBackground(Color.WHITE);
-        p.setBorder(BorderFactory.createEmptyBorder(18, 18, 18, 18));
-        JLabel explainer = new JLabel("<html><h2>Live database dashboard</h2>"
-                + "Connected to the same <b>smart_attendance</b> database as your WT PHP website.<br>"
-                + "Changes made here are stored in MySQL and will be visible to the PHP app too.</html>");
-        p.add(explainer, BorderLayout.NORTH);
-        p.add(chart, BorderLayout.CENTER);
-        JButton refresh = new JButton("Refresh all data");
+        JPanel p = new JPanel(new BorderLayout(16, 16));
+        p.setOpaque(false);
+        JPanel intro = new JPanel(new BorderLayout(8, 8));
+        intro.setBackground(Color.WHITE);
+        intro.setBorder(cardBorder());
+        JLabel heading = new JLabel("Good day. Here is your attendance snapshot.");
+        heading.setFont(new Font("SansSerif", Font.BOLD, 19));
+        heading.setForeground(new Color(23, 37, 63));
+        JLabel sub = new JLabel("Live data from your WT MySQL database · Present and Late count as attended");
+        sub.setFont(new Font("SansSerif", Font.PLAIN, 12));
+        sub.setForeground(new Color(100, 116, 139));
+        JPanel text = new JPanel(new GridLayout(2,1,0,5));
+        text.setOpaque(false);
+        text.add(heading); text.add(sub);
+        intro.add(text, BorderLayout.CENTER);
+        JButton refresh = primaryButton("↻  Refresh data");
         refresh.addActionListener(e -> refreshAll());
-        p.add(refresh, BorderLayout.SOUTH);
+        intro.add(refresh, BorderLayout.EAST);
+
+        JPanel chartCard = new JPanel(new BorderLayout(8,8));
+        chartCard.setBackground(Color.WHITE);
+        chartCard.setBorder(cardBorder());
+        JLabel chartTitle = new JLabel("Attendance rate by student and class");
+        chartTitle.setFont(new Font("SansSerif", Font.BOLD, 16));
+        chartTitle.setForeground(new Color(23, 37, 63));
+        chartCard.add(chartTitle, BorderLayout.NORTH);
+        chartCard.add(chart, BorderLayout.CENTER);
+        p.add(intro, BorderLayout.NORTH);
+        p.add(chartCard, BorderLayout.CENTER);
         return p;
     }
 
@@ -106,7 +181,7 @@ public class AttendanceAnalytics {
         usersTable.setRowHeight(25);
         JPanel p = standardTablePanel(usersTable);
         JPanel actions = new JPanel(new FlowLayout(FlowLayout.LEFT));
-        JButton add = new JButton("Add user/student (use PHP)");
+        JButton add = new JButton("＋  Add user");
         JButton edit = new JButton("Edit selected");
         JButton toggle = new JButton("Toggle active");
         JButton delete = new JButton("Delete selected");
@@ -176,11 +251,81 @@ public class AttendanceAnalytics {
     }
 
     JPanel standardTablePanel(JTable table) {
-        JPanel p = new JPanel(new BorderLayout(8, 8));
+        JPanel p = new JPanel(new BorderLayout(10, 10));
         p.setBackground(Color.WHITE);
-        p.setBorder(BorderFactory.createEmptyBorder(10, 10, 10, 10));
-        p.add(new JScrollPane(table), BorderLayout.CENTER);
+        p.setBorder(cardBorder());
+        table.setFont(new Font("SansSerif", Font.PLAIN, 13));
+        table.setForeground(new Color(51, 65, 85));
+        table.setBackground(Color.WHITE);
+        table.setGridColor(new Color(235, 239, 245));
+        table.setSelectionBackground(new Color(219, 234, 254));
+        table.setSelectionForeground(new Color(23, 37, 63));
+        table.setRowHeight(32);
+        table.setShowVerticalLines(false);
+        table.setShowHorizontalLines(true);
+        table.getTableHeader().setFont(new Font("SansSerif", Font.BOLD, 12));
+        table.getTableHeader().setForeground(new Color(71, 85, 105));
+        table.getTableHeader().setBackground(new Color(246, 248, 252));
+        table.getTableHeader().setPreferredSize(new Dimension(0, 38));
+        JScrollPane scroll = new JScrollPane(table);
+        scroll.setBorder(BorderFactory.createLineBorder(new Color(232, 237, 244)));
+        p.add(scroll, BorderLayout.CENTER);
         return p;
+    }
+
+    void installModernTheme() {
+        try { for (UIManager.LookAndFeelInfo info : UIManager.getInstalledLookAndFeels())
+            if ("Nimbus".equals(info.getName())) { UIManager.setLookAndFeel(info.getClassName()); break; }
+        } catch (Exception ignored) {}
+        UIManager.put("control", new Color(246, 248, 252));
+        UIManager.put("info", Color.WHITE);
+        UIManager.put("nimbusBase", new Color(35, 91, 180));
+        UIManager.put("nimbusBlueGrey", new Color(226, 232, 240));
+        UIManager.put("text", new Color(30, 41, 59));
+        UIManager.put("Button.font", new Font("SansSerif", Font.BOLD, 12));
+        UIManager.put("Label.font", new Font("SansSerif", Font.PLAIN, 13));
+        UIManager.put("TextField.font", new Font("SansSerif", Font.PLAIN, 13));
+        UIManager.put("ComboBox.font", new Font("SansSerif", Font.PLAIN, 13));
+    }
+
+    JButton navButton(String text, boolean active) {
+        JButton b = new JButton("   " + (text.equals("Dashboard") ? "⌂" :
+                text.startsWith("Users") ? "♙" : text.equals("Classes") ? "▦" :
+                text.equals("Attendance") ? "✓" : "▤") + "    " + text);
+        b.setHorizontalAlignment(SwingConstants.LEFT);
+        b.setMaximumSize(new Dimension(Integer.MAX_VALUE, 44));
+        b.setPreferredSize(new Dimension(188, 44));
+        b.setFocusPainted(false);
+        b.setBorder(BorderFactory.createEmptyBorder(0, 8, 0, 8));
+        styleNav(b, active);
+        return b;
+    }
+
+    void styleNav(JButton b, boolean active) {
+        b.setOpaque(true);
+        b.setBackground(active ? new Color(39, 70, 120) : new Color(18, 28, 49));
+        b.setForeground(active ? Color.WHITE : new Color(190, 202, 220));
+        b.setFont(new Font("SansSerif", active ? Font.BOLD : Font.PLAIN, 13));
+        b.setBorder(BorderFactory.createCompoundBorder(
+                BorderFactory.createLineBorder(active ? new Color(53, 95, 158) : new Color(18, 28, 49), 1, true),
+                BorderFactory.createEmptyBorder(0, 6, 0, 6)));
+    }
+
+    JButton primaryButton(String text) {
+        JButton b = new JButton(text);
+        b.setBackground(new Color(35, 91, 180));
+        b.setForeground(Color.WHITE);
+        b.setFocusPainted(false);
+        b.setBorder(BorderFactory.createCompoundBorder(
+                BorderFactory.createLineBorder(new Color(35, 91, 180), 1, true),
+                BorderFactory.createEmptyBorder(10, 14, 10, 14)));
+        return b;
+    }
+
+    javax.swing.border.Border cardBorder() {
+        return BorderFactory.createCompoundBorder(
+                BorderFactory.createLineBorder(new Color(229, 234, 242), 1, true),
+                BorderFactory.createEmptyBorder(16, 16, 16, 16));
     }
 
     DefaultTableModel model(String... cols) {
@@ -221,8 +366,34 @@ public class AttendanceAnalytics {
     }
 
     void addUser() {
-        info("Create new accounts through the WT PHP Users page so passwords are stored with PHP password_hash(). "
-                + "This Java app can edit, activate/deactivate, and delete existing accounts without risking incompatible password hashes.");
+        JTextField name = new JTextField();
+        JTextField email = new JTextField();
+        JPasswordField password = new JPasswordField();
+        JComboBox<String> role = new JComboBox<>(new String[]{"student", "teacher", "admin"});
+        JPanel form = formPanel(new String[]{"Full name", "Email", "Password (min 6 chars)", "Role"},
+                new JComponent[]{name, email, password, role});
+        if (JOptionPane.showConfirmDialog(frame, form, "Create account", JOptionPane.OK_CANCEL_OPTION) != JOptionPane.OK_OPTION) return;
+        String n = name.getText().trim(), em = email.getText().trim(), pw = new String(password.getPassword());
+        if (n.length() < 2 || em.isBlank() || pw.length() < 6) {
+            info("Enter a full name, email, and password of at least 6 characters."); return;
+        }
+        try {
+            String hash = bcryptHash(pw);
+            try (Connection c = db(); PreparedStatement ps = c.prepareStatement(
+                    "INSERT INTO users(full_name,email,password,role) VALUES(?,?,?,?)")) {
+                ps.setString(1, n); ps.setString(2, em); ps.setString(3, hash); ps.setString(4, role.getSelectedItem().toString());
+                ps.executeUpdate();
+            }
+            loadUsers(); loadClasses(); loadOverview();
+            info("Account created successfully.");
+        } catch (Exception e) { error("Could not create account. Check that the email is unique and BCrypt dependency is installed.", e); }
+    }
+
+    String bcryptHash(String password) throws Exception {
+        // Uses jBCrypt to create hashes compatible with PHP password_verify().
+        Class<?> bcrypt = Class.forName("org.mindrot.jbcrypt.BCrypt");
+        Object salt = bcrypt.getMethod("gensalt", int.class).invoke(null, 10);
+        return (String) bcrypt.getMethod("hashpw", String.class, String.class).invoke(null, password, salt);
     }
 
     void editUser() {
@@ -440,7 +611,7 @@ public class AttendanceAnalytics {
             for(int pct=0;pct<=100;pct+=20){int y=top+h-h*pct/100;x.drawLine(left,y,left+w,y);x.setColor(Color.DARK_GRAY);x.drawString(pct+"%",12,y+4);x.setColor(new Color(220,226,235));}
             int n=Math.min(values.size(),Math.max(1,w/36));
             if(values.isEmpty()){x.setColor(Color.DARK_GRAY);x.drawString("No report data yet.",left+10,top+20);}
-            else {int gap=5,bw=Math.max(4,(w-gap*n)/n);for(int i=0;i<n;i++){double val=Math.min(100,Math.max(0,values.get(i)));int bh=(int)(h*val/100);int bx=left+i*(bw+gap),by=top+h-bh;x.setColor(BLUE);x.fillRoundRect(bx,by,bw,bh,6,6);x.setColor(Color.DARK_GRAY);x.setFont(new Font("SansSerif",Font.PLAIN,9));x.drawString(String.format(Locale.US,"%.0f%%",val),bx,Math.max(top+10,by-3));}}
+            else {int gap=5,bw=Math.max(4,(w-gap*n)/n);for(int i=0;i<n;i++){double val=Math.min(100,Math.max(0,values.get(i)));int bh=(int)(h*val/100);int bx=left+i*(bw+gap),by=top+h-bh;x.setColor(new Color(59, 130, 246));x.fillRoundRect(bx,by,bw,bh,6,6);x.setColor(Color.DARK_GRAY);x.setFont(new Font("SansSerif",Font.PLAIN,9));x.drawString(String.format(Locale.US,"%.0f%%",val),bx,Math.max(top+10,by-3));}}
             x.setColor(Color.DARK_GRAY);x.drawString("Attendance rate by student/class · showing "+n+" of "+values.size(),left,getHeight()-18);x.dispose();
         }
     }

@@ -1,39 +1,22 @@
-# Smart Attendance Analytics GUI (MySQL/MariaDB)
+# Smart Attendance Java GUI
 
-This Swing GUI connects to the existing `smart_attendance` database used by the WT PHP project. It does not create, drop, or alter tables.
-
-## Requirements
-- Java 21+
-- XAMPP MySQL/MariaDB running
-- The existing database `smart_attendance`
-- Internet access on first run to download MariaDB Connector/J
-
-## Run on macOS
-```bash
-cd ~/Downloads/attendance-analytics-mysql
-./run-gui.sh
-```
-
-Defaults match a typical local XAMPP setup:
-- JDBC URL: `jdbc:mariadb://127.0.0.1:3306/smart_attendance`
-- User: `root`
-- Password: empty
-
-If your local DB password differs, set it only in your terminal environment before launching:
-```bash
-export WT_DB_USER=root
-read -s "WT_DB_PASSWORD?Database password: "; export WT_DB_PASSWORD; echo
-./run-gui.sh
-```
-
-`WT_RECORDED_BY` must be the ID of an existing user in the database. It defaults to `2` (the demo teacher ID); set it to the appropriate teacher/admin ID for your local data, e.g. `export WT_RECORDED_BY=5`.
+This Swing application reads and updates the existing WT `smart_attendance` MariaDB database. It does not create, drop, or alter database tables.
 
 ## Features
-- Live dashboard counts from the database
-- Class selector and enrolled student list
-- Mark/save attendance for a date using present, absent, late, or excused
-- Upsert behavior matches the PHP app's unique key on class/student/date
-- Reports and a bar chart based on existing attendance records
-- Present and Late count as attended, matching the PHP reports
+- Live dashboard counts
+- User/student list with edit, activate/deactivate, and delete actions
+- Class and enrolment overview, plus enrolment action
+- Attendance class/date selector, mark/edit status, save/upsert, delete, and history
+- Reports and attendance-rate bar chart
+- Preserves statuses `present`, `absent`, `late`, `excused`; Present and Late count as attended
 
-The app does not create/edit user accounts or classes. Use the PHP website for those actions, so password hashing and role rules remain handled by the website.
+## Run on macOS
+1. Ensure XAMPP MySQL is running.
+2. In Terminal, run `./run-gui.sh` from this directory.
+3. The first run downloads MariaDB Connector/J.
+
+Defaults: `jdbc:mariadb://127.0.0.1:3306/smart_attendance`, user `root`, empty password.
+If your database has a password, set `WT_DB_PASSWORD` in the environment before running.
+`WT_RECORDED_BY` defaults to `2`; it must be an existing users.id because `attendance.recorded_by` has a foreign key.
+
+For password safety and compatibility with PHP's `password_verify`, create new user accounts using the WT PHP Users page. Java can edit user names/emails/roles, activate/deactivate, and delete subject to database foreign-key constraints.

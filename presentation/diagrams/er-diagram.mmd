@@ -1,0 +1,35 @@
+erDiagram
+  USERS ||--o{ CLASSES : teaches
+  USERS ||--o{ ENROLLMENTS : enrolls
+  CLASSES ||--o{ ENROLLMENTS : contains
+  USERS ||--o{ ATTENDANCE : student
+  USERS ||--o{ ATTENDANCE : records
+  CLASSES ||--o{ ATTENDANCE : has
+  USERS {
+    int id PK
+    string full_name
+    string email UK
+    string password
+    enum role
+    boolean is_active
+    datetime created_at
+  }
+  CLASSES {
+    int id PK
+    string class_code UK
+    string class_name
+    int teacher_id FK
+  }
+  ENROLLMENTS {
+    int class_id PK,FK
+    int student_id PK,FK
+  }
+  ATTENDANCE {
+    int id PK
+    int class_id FK
+    int student_id FK
+    date attendance_date
+    enum status
+    int recorded_by FK
+    datetime created_at
+  }

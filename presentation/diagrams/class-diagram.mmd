@@ -1,0 +1,49 @@
+classDiagram
+  class User {
+    +int id
+    +String fullName
+    +String email
+    +Role role
+    +boolean active
+    +create()
+    +update()
+    +deactivate()
+  }
+  class CourseClass {
+    +int id
+    +String classCode
+    +String className
+    +int teacherId
+    +listClasses()
+  }
+  class Enrollment {
+    +int classId
+    +int studentId
+    +enrollStudent()
+    +listEnrolledStudents()
+  }
+  class AttendanceRecord {
+    +int id
+    +int classId
+    +int studentId
+    +Date attendanceDate
+    +AttendanceStatus status
+    +int recordedBy
+    +save()
+    +delete()
+  }
+  class AttendanceAnalytics {
+    +dashboard()
+    +manageUsers()
+    +manageClasses()
+    +markAttendance()
+    +reportsAndCharts()
+  }
+  User "1" --> "many" CourseClass : teaches
+  CourseClass "1" --> "many" Enrollment : contains
+  User "1" --> "many" Enrollment : student
+  CourseClass "1" --> "many" AttendanceRecord : records
+  User "1" --> "many" AttendanceRecord : student / recorder
+  AttendanceAnalytics ..> User : manages
+  AttendanceAnalytics ..> CourseClass : manages
+  AttendanceAnalytics ..> AttendanceRecord : records

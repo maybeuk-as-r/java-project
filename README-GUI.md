@@ -1,53 +1,39 @@
-# Attendly — Attendance Analytics GUI
+# Smart Attendance Analytics GUI (MySQL/MariaDB)
 
-A Java Swing desktop application for managing students, recording attendance, and viewing visual attendance charts.
-
-## Features
-- Modern desktop GUI with Dashboard, Students, Attendance, and Reports pages
-- Add, edit, and delete students
-- Mark Present/Absent attendance by date; one record per student per date
-- Student attendance percentage bar chart
-- Present vs absent summary chart
-- Automatic CSV persistence in `data/attendance.csv`
-- First-run demo records so the interface is populated immediately
-- No external libraries required
+This Swing GUI connects to the existing `smart_attendance` database used by the WT PHP project. It does not create, drop, or alter tables.
 
 ## Requirements
-- JDK 17 or later
+- Java 21+
+- XAMPP MySQL/MariaDB running
+- The existing database `smart_attendance`
+- Internet access on first run to download MariaDB Connector/J
 
-## Run
-**macOS / Linux**
+## Run on macOS
 ```bash
-javac -d out src/AttendanceAnalytics.java
-java -cp out AttendanceAnalytics
+cd ~/Downloads/attendance-analytics-mysql
+./run-gui.sh
 ```
 
-**Windows**
-```bat
-javac -d out src\AttendanceAnalytics.java
-java -cp out AttendanceAnalytics
+Defaults match a typical local XAMPP setup:
+- JDBC URL: `jdbc:mariadb://127.0.0.1:3306/smart_attendance`
+- User: `root`
+- Password: empty
+
+If your local DB password differs, set it only in your terminal environment before launching:
+```bash
+export WT_DB_USER=root
+read -s "WT_DB_PASSWORD?Database password: "; export WT_DB_PASSWORD; echo
+./run-gui.sh
 ```
 
-Run the commands from the project folder. The `data` folder is created automatically.
+`WT_RECORDED_BY` must be the ID of an existing user in the database. It defaults to `2` (the demo teacher ID); set it to the appropriate teacher/admin ID for your local data, e.g. `export WT_RECORDED_BY=5`.
 
-## Project structure
-```text
-attendance-analytics-gui/
-├── src/
-│   └── AttendanceAnalytics.java
-├── .gitignore
-├── README.md
-└── run.sh
-```
+## Features
+- Live dashboard counts from the database
+- Class selector and enrolled student list
+- Mark/save attendance for a date using present, absent, late, or excused
+- Upsert behavior matches the PHP app's unique key on class/student/date
+- Reports and a bar chart based on existing attendance records
+- Present and Late count as attended, matching the PHP reports
 
-## Data format
-The application stores students and attendance records as CSV rows:
-- `S,studentId,name,className`
-- `A,studentId,YYYY-MM-DD,P|A`
-
-Names and class values containing commas are normalized to spaces for simple CSV storage.
-
-## Academic project summary
-**Problem:** Attendance registers are slow to update and make class-level patterns difficult to see.
-**Solution:** A GUI that keeps student records and daily attendance in one place, then visualizes attendance percentages.
-**Core Java concepts:** Classes and objects, collections, file handling, exception handling, Swing GUI components, event listeners, and custom Java2D chart drawing.
+The app does not create/edit user accounts or classes. Use the PHP website for those actions, so password hashing and role rules remain handled by the website.

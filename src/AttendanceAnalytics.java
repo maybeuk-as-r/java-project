@@ -7,9 +7,6 @@ import java.util.*;
 import java.util.List;
 
 /**
- * Smart Attendance Java GUI for the existing WT smart_attendance database.
- * Uses existing tables only. Does not create, drop, or migrate schema.
- *
  * Environment variables:
  * WT_DB_URL       default jdbc:mariadb://127.0.0.1:3306/smart_attendance
  * WT_DB_USER      default root
@@ -17,14 +14,17 @@ import java.util.List;
  * WT_RECORDED_BY  default 2; must be an existing user ID for attendance writes
  */
 public class AttendanceAnalytics {
+    // Connection settings can be overridden with environment variables; defaults are for local XAMPP/MariaDB.
     static final String DB_URL = System.getenv().getOrDefault("WT_DB_URL",
             "jdbc:mariadb://127.0.0.1:3306/smart_attendance");
     static final String DB_USER = System.getenv().getOrDefault("WT_DB_USER", "root");
     static final String DB_PASSWORD = System.getenv().getOrDefault("WT_DB_PASSWORD", "");
     static final int RECORDED_BY = Integer.parseInt(System.getenv().getOrDefault("WT_RECORDED_BY", "2"));
+    // Shared visual/status constants. STATUSES must match the database ENUM values.
     static final Color BLUE = new Color(35, 91, 180);
     static final String[] STATUSES = {"present", "absent", "late", "excused"};
 
+    // References to GUI components are fields because several methods update them later.
     JFrame frame;
     JLabel overview = new JLabel("Connecting...");
     DefaultTableModel usersModel, classesModel, attendanceModel, reportsModel;
@@ -33,16 +33,22 @@ public class AttendanceAnalytics {
     JTextField attendanceDate = new JTextField(LocalDate.now().toString(), 10);
     BarChart chart = new BarChart();
 
+    // DATABASE HELPER: opens a JDBC connection using the configuration above.
+    // Callers use try-with-resources so the connection closes automatically.
     static Connection db() throws SQLException {
         return DriverManager.getConnection(DB_URL, DB_USER, DB_PASSWORD);
     }
 
+    // PROGRAM ENTRY POINT: SwingUtilities.invokeLater starts GUI work on Swing's event-dispatch thread.
     public static void main(String[] args) {
         SwingUtilities.invokeLater(() -> new AttendanceAnalytics().launch());
     }
 
+    // BUILDS THE MAIN WINDOW. First test the database connection, then create the sidebar, pages and navigation.
     void launch() {
+        // Set the appearance before constructing components.
         installModernTheme();
+        // A tiny SELECT 1 query checks that MariaDB is reachable before showing the application.
         try (Connection c = db()) {
             try (Statement s = c.createStatement(); ResultSet r = s.executeQuery("SELECT 1")) {
                 if (!r.next()) throw new SQLException("Database ping failed.");
@@ -98,6 +104,7 @@ public class AttendanceAnalytics {
         topbar.add(overview, BorderLayout.SOUTH);
         content.add(topbar, BorderLayout.NORTH);
 
+        // CardLayout keeps all pages in one area and shows one page at a time.
         JPanel pageHost = new JPanel(new CardLayout());
         pageHost.setBackground(new Color(246, 248, 252));
         String[] pageNames = {"Dashboard", "Users & Students", "Classes", "Attendance", "Reports"};
@@ -112,6 +119,7 @@ public class AttendanceAnalytics {
             pageHost.add(wrap, pageNames[i]);
             final String pageName = pageNames[i];
             JButton nav = navButton(pageName, i == 0);
+            // Event listener: when clicked, show the selected page and update its title/style.
             nav.addActionListener(e -> {
                 cardLayout.show(pageHost, pageName);
                 title.setText(pageName.equals("Users & Students") ? "Users & Students" :
@@ -142,6 +150,7 @@ public class AttendanceAnalytics {
         refreshAll();
     }
 
+    // DASHBOARD TAB: shows a short summary and a custom attendance-rate chart.
     JPanel dashboard() {
         JPanel p = new JPanel(new BorderLayout(16, 16));
         p.setOpaque(false);
@@ -175,6 +184,7 @@ public class AttendanceAnalytics {
         return p;
     }
 
+    // USERS TAB: creates the users table and buttons for add, edit, activate/deactivate and delete.
     JPanel usersPanel() {
         usersModel = model("ID", "Full name", "Email", "Role", "Active");
         usersTable = new JTable(usersModel);
@@ -186,6 +196,7 @@ public class AttendanceAnalytics {
         JButton toggle = new JButton("Toggle active");
         JButton delete = new JButton("Delete selected");
         JButton reload = new JButton("Refresh");
+        // ActionListeners connect button clicks to the matching methods.
         add.addActionListener(e -> addUser());
         edit.addActionListener(e -> editUser());
         toggle.addActionListener(e -> toggleUser());
@@ -196,6 +207,7 @@ public class AttendanceAnalytics {
         return p;
     }
 
+    // CLASSES TAB: displays classes and teacher names, and provides student-enrolment actions.
     JPanel classesPanel() {
         classesModel = model("ID", "Code", "Class name", "Teacher", "Enrolled students");
         classesTable = new JTable(classesModel);
@@ -211,6 +223,7 @@ public class AttendanceAnalytics {
         return p;
     }
 
+    // ATTENDANCE TAB: lets the user choose a class/date, load students, edit statuses and save records.
     JPanel attendancePanel() {
         attendanceModel = model("Record ID", "Student ID", "Student", "Class", "Date", "Status");
         attendanceTable = new JTable(attendanceModel);
@@ -239,6 +252,7 @@ public class AttendanceAnalytics {
         return p;
     }
 
+    // REPORTS TAB: displays calculated attendance statistics and offers a refresh button.
     JPanel reportsPanel() {
         reportsModel = model("Student", "Class", "Sessions", "Attended", "Attendance rate");
         reportsTable = new JTable(reportsModel);
@@ -250,6 +264,7 @@ public class AttendanceAnalytics {
         return p;
     }
 
+    // SHARED TABLE STYLING: puts any JTable inside a styled panel and a scroll pane.
     JPanel standardTablePanel(JTable table) {
         JPanel p = new JPanel(new BorderLayout(10, 10));
         p.setBackground(Color.WHITE);
@@ -273,6 +288,7 @@ public class AttendanceAnalytics {
         return p;
     }
 
+    // UI THEME: configures Swing's Nimbus look-and-feel and default component colours/fonts.
     void installModernTheme() {
         try { for (UIManager.LookAndFeelInfo info : UIManager.getInstalledLookAndFeels())
             if ("Nimbus".equals(info.getName())) { UIManager.setLookAndFeel(info.getClassName()); break; }
@@ -288,6 +304,7 @@ public class AttendanceAnalytics {
         UIManager.put("ComboBox.font", new Font("SansSerif", Font.PLAIN, 13));
     }
 
+    // Creates one sidebar navigation button; the active page is styled differently.
     JButton navButton(String text, boolean active) {
         JButton b = new JButton("   " + (text.equals("Dashboard") ? "⌂" :
                 text.startsWith("Users") ? "♙" : text.equals("Classes") ? "▦" :
@@ -301,6 +318,7 @@ public class AttendanceAnalytics {
         return b;
     }
 
+    // Applies selected/unselected colours and borders to a navigation button.
     void styleNav(JButton b, boolean active) {
         b.setOpaque(true);
         b.setBackground(active ? new Color(39, 70, 120) : new Color(18, 28, 49));
@@ -311,6 +329,7 @@ public class AttendanceAnalytics {
                 BorderFactory.createEmptyBorder(0, 6, 0, 6)));
     }
 
+    // Creates the blue-styled primary action button used on the dashboard.
     JButton primaryButton(String text) {
         JButton b = new JButton(text);
         b.setBackground(new Color(35, 91, 180));
@@ -322,25 +341,31 @@ public class AttendanceAnalytics {
         return b;
     }
 
+    // Returns a reusable border with a thin outline and inner padding for cards.
     javax.swing.border.Border cardBorder() {
         return BorderFactory.createCompoundBorder(
                 BorderFactory.createLineBorder(new Color(229, 234, 242), 1, true),
                 BorderFactory.createEmptyBorder(16, 16, 16, 16));
     }
 
+    // Creates a table model with the given column headings and no initial rows.
+    // Cells are read-only in the table; edits are done through the app's buttons/dialogs.
     DefaultTableModel model(String... cols) {
         return new DefaultTableModel(cols, 0) {
             @Override public boolean isCellEditable(int row, int col) { return false; }
         };
     }
 
+    // Reloads every screen's data from the database so the GUI reflects current records.
     void refreshAll() {
         try {
             loadUsers(); loadClasses(); loadAttendanceHistory(); loadReports(); loadOverview();
         } catch (Exception e) { error("Refresh failed", e); }
     }
 
+    // Runs aggregate COUNT queries for the dashboard summary (students, teachers, classes, etc.).
     void loadOverview() throws SQLException {
+        // Subqueries each calculate one dashboard metric and return them as a single result row.
         String q = "SELECT (SELECT COUNT(*) FROM users WHERE role='student' AND is_active=1) students,"
                 + "(SELECT COUNT(*) FROM users WHERE role='teacher' AND is_active=1) teachers,"
                 + "(SELECT COUNT(*) FROM classes) classes,"
@@ -355,9 +380,11 @@ public class AttendanceAnalytics {
         }
     }
 
+    // Reads user details from MariaDB and fills the Users JTable model.
     void loadUsers() {
         if (usersModel == null) return;
         usersModel.setRowCount(0);
+        // SELECT retrieves only the columns needed for the visible table; password hashes are not displayed.
         String q = "SELECT id,full_name,email,role,is_active FROM users ORDER BY role,full_name";
         try (Connection c = db(); Statement s = c.createStatement(); ResultSet r = s.executeQuery(q)) {
             while (r.next()) usersModel.addRow(new Object[]{r.getInt("id"), r.getString("full_name"),
@@ -365,6 +392,7 @@ public class AttendanceAnalytics {
         } catch (Exception e) { error("Could not load users", e); }
     }
 
+    // Opens a form, validates the values, hashes the password, and INSERTs a new user.
     void addUser() {
         JTextField name = new JTextField();
         JTextField email = new JTextField();
@@ -378,7 +406,9 @@ public class AttendanceAnalytics {
             info("Enter a full name, email, and password of at least 6 characters."); return;
         }
         try {
+            // Never store the raw password. Store a salted bcrypt hash instead.
             String hash = bcryptHash(pw);
+            // PreparedStatement placeholders (?) keep user input separate from SQL syntax.
             try (Connection c = db(); PreparedStatement ps = c.prepareStatement(
                     "INSERT INTO users(full_name,email,password,role) VALUES(?,?,?,?)")) {
                 ps.setString(1, n); ps.setString(2, em); ps.setString(3, hash); ps.setString(4, role.getSelectedItem().toString());
@@ -389,6 +419,7 @@ public class AttendanceAnalytics {
         } catch (Exception e) { error("Could not create account. Check that the email is unique and BCrypt dependency is installed.", e); }
     }
 
+    // Uses jBCrypt via reflection so new passwords are stored as bcrypt hashes, not plain text.
     String bcryptHash(String password) throws Exception {
         // Uses jBCrypt to create hashes compatible with PHP password_verify().
         Class<?> bcrypt = Class.forName("org.mindrot.jbcrypt.BCrypt");
@@ -396,6 +427,7 @@ public class AttendanceAnalytics {
         return (String) bcrypt.getMethod("hashpw", String.class, String.class).invoke(null, password, salt);
     }
 
+    // Updates the selected user's name, email and role using a parameterised UPDATE query.
     void editUser() {
         int row = selected(usersTable);
         if (row < 0) return;
@@ -415,6 +447,7 @@ public class AttendanceAnalytics {
         } catch (Exception e) { error("Could not update user. Check unique email and foreign-key constraints.", e); }
     }
 
+    // Switches is_active between 1 (active) and 0 (disabled) for the selected user.
     void toggleUser() {
         int row = selected(usersTable); if (row < 0) return;
         int id = Integer.parseInt(usersModel.getValueAt(row, 0).toString());
@@ -424,6 +457,7 @@ public class AttendanceAnalytics {
         } catch (Exception e) { error("Could not change account status", e); }
     }
 
+    // Confirms then deletes a user. Foreign-key relationships may prevent unsafe deletion.
     void deleteUser() {
         int row = selected(usersTable); if (row < 0) return;
         int id = Integer.parseInt(usersModel.getValueAt(row, 0).toString());
@@ -434,9 +468,11 @@ public class AttendanceAnalytics {
         } catch (Exception e) { error("Could not delete user. Referenced users must be reassigned or retained.", e); }
     }
 
+    // Loads classes with teacher names and enrolment counts using JOIN and GROUP BY.
     void loadClasses() {
         if (classesModel == null) return;
         classesModel.setRowCount(0);
+        // JOIN attaches the teacher name; LEFT JOIN keeps classes even if they have zero enrolled students.
         String q = "SELECT c.id,c.class_code,c.class_name,u.full_name teacher_name,COUNT(e.student_id) students "
                 + "FROM classes c JOIN users u ON u.id=c.teacher_id LEFT JOIN enrollments e ON e.class_id=c.id "
                 + "GROUP BY c.id,c.class_code,c.class_name,u.full_name ORDER BY c.class_code";
@@ -447,6 +483,7 @@ public class AttendanceAnalytics {
         } catch (Exception e) { error("Could not load classes", e); }
     }
 
+    // Refreshes the class dropdown while trying to keep the previously selected class.
     void reloadClassChoices(Connection c) throws SQLException {
         Item previous = (Item) attendanceClass.getSelectedItem();
         attendanceClass.removeAllItems();
@@ -458,6 +495,7 @@ public class AttendanceAnalytics {
             if (attendanceClass.getItemAt(i).id == previous.id) attendanceClass.setSelectedIndex(i);
     }
 
+    // Loads available classes and active students, then INSERTs the chosen pair into enrollments.
     void enrollStudent() {
         List<Item> classes = new ArrayList<>(), students = new ArrayList<>();
         try (Connection c = db(); Statement s = c.createStatement(); ResultSet r = s.executeQuery(
@@ -479,12 +517,15 @@ public class AttendanceAnalytics {
         } catch (Exception e) { error("Could not enroll student (they may already be enrolled)", e); }
     }
 
+    // Validates the selected date and loads enrolled students plus their saved status for that date.
+    // COALESCE displays "present" when no attendance row exists yet; saving writes the displayed status.
     void loadAttendance() {
         Item cl = (Item) attendanceClass.getSelectedItem();
         if (cl == null) return;
         try { LocalDate.parse(attendanceDate.getText().trim()); }
         catch (Exception e) { info("Enter date as YYYY-MM-DD."); return; }
         attendanceModel.setRowCount(0);
+        // LEFT JOIN preserves enrolled students even when no attendance record exists for the chosen date.
         String q = "SELECT a.id record_id,u.id student_id,u.full_name,c.class_code,? att_date,"
                 + "COALESCE(a.status,'present') status FROM enrollments e JOIN users u ON u.id=e.student_id "
                 + "JOIN classes c ON c.id=e.class_id LEFT JOIN attendance a ON a.class_id=e.class_id "
@@ -498,6 +539,7 @@ public class AttendanceAnalytics {
         } catch (Exception e) { error("Could not load selected class attendance", e); }
     }
 
+    // Loads the latest 1,000 saved attendance rows, newest date first.
     void loadAttendanceHistory() {
         if (attendanceModel == null) return;
         attendanceModel.setRowCount(0);
@@ -510,6 +552,8 @@ public class AttendanceAnalytics {
         } catch (Exception e) { error("Could not load attendance history", e); }
     }
 
+    // Lets the user choose a valid status and updates the selected row in the in-memory table model.
+    // The change is persisted only after Save class attendance is clicked.
     void editAttendanceStatus() {
         int row = selected(attendanceTable); if (row < 0) return;
         String current = attendanceModel.getValueAt(row, 5).toString();
@@ -518,15 +562,20 @@ public class AttendanceAnalytics {
         attendanceModel.setValueAt(status.getSelectedItem().toString(), row, 5);
     }
 
+    // Saves all matching class/date rows in one database transaction. Batch execution is faster;
+    // commit saves all changes together, while rollback undoes them if any row fails.
     void saveClassAttendance() {
         Item cl = (Item) attendanceClass.getSelectedItem();
         if (cl == null) return;
         LocalDate date;
         try { date = LocalDate.parse(attendanceDate.getText().trim()); }
         catch (Exception e) { info("Enter date as YYYY-MM-DD."); return; }
+        // Unique key on (class_id, student_id, attendance_date) makes this an upsert: insert new rows,
+        // or update the existing row for that student/class/date.
         String sql = "INSERT INTO attendance(class_id,student_id,attendance_date,status,recorded_by) VALUES(?,?,?,?,?) "
                 + "ON DUPLICATE KEY UPDATE status=VALUES(status),recorded_by=VALUES(recorded_by)";
         try (Connection c = db()) {
+            // Disable auto-commit so all attendance rows are treated as one transaction.
             c.setAutoCommit(false);
             try (PreparedStatement ps = c.prepareStatement(sql)) {
                 for (int i=0;i<attendanceModel.getRowCount();i++) {
@@ -539,14 +588,16 @@ public class AttendanceAnalytics {
                     ps.setInt(1, cl.id); ps.setInt(2, studentId); ps.setDate(3, java.sql.Date.valueOf(date));
                     ps.setString(4,status); ps.setInt(5,RECORDED_BY); ps.addBatch();
                 }
+                // Apply all queued statements, then commit the transaction.
                 ps.executeBatch(); c.commit();
-            } catch (Exception e) { c.rollback(); throw e; }
+            } catch (Exception e) { c.rollback(); throw e; } // If any write fails, undo all writes in this batch.
             finally { c.setAutoCommit(true); }
             loadAttendanceHistory(); loadReports(); loadOverview();
             info("Attendance saved to the shared smart_attendance database.");
         } catch (Exception e) { error("Save failed. Ensure WT_RECORDED_BY is an existing users.id.", e); }
     }
 
+    // Confirms and deletes one saved attendance record by its primary-key ID.
     void deleteAttendance() {
         int row = selected(attendanceTable); if (row < 0) return;
         Object idObj = attendanceModel.getValueAt(row,0);
@@ -561,10 +612,12 @@ public class AttendanceAnalytics {
         } catch (Exception e) { error("Could not delete attendance record", e); }
     }
 
+    // Calculates sessions, attended sessions and percentage per student/class, then updates the chart.
     void loadReports() {
         if (reportsModel == null) return;
         reportsModel.setRowCount(0);
         List<String> labels = new ArrayList<>(); List<Double> rates = new ArrayList<>();
+        // COUNT counts recorded sessions. Present and late are treated as attended; NULLIF avoids division by zero.
         String q = "SELECT u.full_name,c.class_code,COUNT(a.id) sessions,"
                 + "SUM(a.status IN ('present','late')) attended,"
                 + "ROUND(100*SUM(a.status IN ('present','late'))/NULLIF(COUNT(a.id),0),1) rate "
@@ -581,30 +634,37 @@ public class AttendanceAnalytics {
         } catch (Exception e) { error("Could not load reports", e); }
     }
 
+    // Builds a simple two-column form: each label is placed beside its input component.
     JPanel formPanel(String[] labels, JComponent[] fields) {
         JPanel p = new JPanel(new GridLayout(labels.length,2,8,8));
         for (int i=0;i<labels.length;i++) { p.add(new JLabel(labels[i])); p.add(fields[i]); }
         return p;
     }
+    // Returns the selected row index in the table model, or -1 after showing a message if none is selected.
     int selected(JTable table) {
         if (table == null || table.getSelectedRow() < 0) { info("Select a row first."); return -1; }
         return table.convertRowIndexToModel(table.getSelectedRow());
     }
+    // Shows a normal informational popup.
     void info(String s) { JOptionPane.showMessageDialog(frame,s,"Smart Attendance",JOptionPane.INFORMATION_MESSAGE); }
+    // Shows an error popup and includes the exception message to help diagnose the problem.
     void error(String s, Exception e) { JOptionPane.showMessageDialog(frame,s + "\n\n" + e.getMessage(),"Smart Attendance",JOptionPane.ERROR_MESSAGE); }
 
+    // Small helper object for dropdowns. It stores IDs separately from the human-readable label.
     static class Item {
         final int id; final String code, name;
         Item(int id,String code,String name) { this.id=id;this.code=code;this.name=name; }
         public String toString() { return code.isEmpty() ? name + " (ID " + id + ")" : code + " — " + name; }
     }
 
+    // CUSTOM SWING CHART: draws attendance percentages directly using Java 2D graphics.
     static class BarChart extends JPanel {
         List<String> labels = new ArrayList<>(); List<Double> values = new ArrayList<>();
         BarChart() { setPreferredSize(new Dimension(700,300)); setBackground(Color.WHITE); }
         void setData(List<String> l,List<Double> v) { labels=new ArrayList<>(l); values=new ArrayList<>(v); repaint(); }
         protected void paintComponent(Graphics g) {
             super.paintComponent(g); Graphics2D x=(Graphics2D)g.create();
+            // Anti-aliasing smooths the edges of the chart bars and text.
             x.setRenderingHint(RenderingHints.KEY_ANTIALIASING,RenderingHints.VALUE_ANTIALIAS_ON);
             int left=55,top=20,w=getWidth()-75,h=getHeight()-65;
             x.setColor(new Color(220,226,235));
